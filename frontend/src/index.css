@@ -1,1 +1,99 @@
 @import "tailwindcss";
+
+body {
+  margin: 0;
+  overflow-x: hidden;
+  background: #020617;
+}
+
+.moving-lights {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+
+  background:
+    linear-gradient(
+      120deg,
+      transparent 0%,
+      rgba(212, 175, 55, 0.45) 45%,
+      transparent 70%
+    ),
+    linear-gradient(
+      60deg,
+      transparent 0%,
+      rgba(0, 180, 255, 0.25) 40%,
+      transparent 65%
+    );
+
+  background-size: 300% 300%;
+  animation: roadLights 4s linear infinite;
+}
+
+@keyframes roadLights {
+  0% {
+    background-position: -200% 50%;
+  }
+
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+.nav-btn {
+  width: 100%;
+  text-align: left;
+  padding: 14px 18px;
+  border-radius: 16px;
+  transition: all 0.3s ease;
+  color: white;
+  display: block;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.nav-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f7d77a;
+}
+
+.input {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 16px;
+  border-radius: 16px;
+  color: white;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.input:focus {
+  border-color: rgba(212, 175, 55, 0.7);
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.15);
+}
+
+.input::placeholder {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.gold-btn {
+  background: #d4af37;
+  color: black;
+  padding: 16px;
+  border-radius: 16px;
+  font-weight: bold;
+  transition: all 0.3s ease;
+}
+
+.gold-btn:hover {
+  background: #f7d77a;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(212, 175, 55, 0.25);
+}
+
+.panel {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 28px;
+  border-radius: 28px;
+  backdrop-filter: blur(20px);
+}
