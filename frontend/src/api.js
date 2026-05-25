@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "http://localhost:8080/api",
+baseURL: "https://car-rental-management-system-6w6i.onrender.com/api",
 });
 
 api.interceptors.request.use((config) => {
