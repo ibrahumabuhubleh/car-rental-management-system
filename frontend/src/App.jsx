@@ -1,19 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "./api";
-
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-} from "recharts";
+import AnalyticsCharts from "./components/AnalyticsCharts";
 
 function App() {
   const [cars, setCars] = useState([]);
@@ -21,9 +9,21 @@ function App() {
   const [bookings, setBookings] = useState([]);
   const [maintenanceRecords, setMaintenanceRecords] = useState([]);
 
+  const [isAuthenticated, setIsAuthenticated] = useState(
+    localStorage.getItem("token") ? true : false
+  );
+
+  const [loginData, setLoginData] = useState({
+    username: "",
+    password: "",
+  });
+
+  const [loginError, setLoginError] = useState("");
+
   const [page, setPage] = useState("dashboard");
   const [showForm, setShowForm] = useState(false);
   const [editingCar, setEditingCar] = useState(null);
+  const [selectedCar, setSelectedCar] = useState(null);
 
   const [bookingData, setBookingData] = useState({
     carId: "",
@@ -40,6 +40,15 @@ function App() {
   });
 
   const [recommendedCars, setRecommendedCars] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("ALL");
+
+  const [customerData, setCustomerData] = useState({
+    fullName: "",
+    email: "",
+    phoneNumber: "",
+    driverLicenseNumber: "",
+  });
 
   const [maintenanceData, setMaintenanceData] = useState({
     carId: "",
@@ -64,11 +73,13 @@ function App() {
   const [newCar, setNewCar] = useState(emptyCar);
 
   useEffect(() => {
-    fetchCars();
-    fetchCustomers();
-    fetchBookings();
-    fetchMaintenanceRecords();
-  }, []);
+    if (isAuthenticated) {
+      fetchCars();
+      fetchCustomers();
+      fetchBookings();
+      fetchMaintenanceRecords();
+    }
+  }, [isAuthenticated]);
 
   const fetchCars = async () => {
     const res = await api.get("/cars");
@@ -97,6 +108,40 @@ function App() {
     seats: Number(car.seats),
     performanceScore: Number(car.performanceScore),
   });
+
+  const handleLoginChange = (e) => {
+    setLoginData({
+      ...loginData,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+
+    try {
+      const res = await api.post("/auth/login", {
+        username: loginData.username,
+        password: loginData.password,
+      });
+
+      localStorage.setItem("token", res.data.token);
+      setIsAuthenticated(true);
+      setLoginError("");
+    } catch (err) {
+      setLoginError("Invalid username or password");
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    setIsAuthenticated(false);
+    setLoginData({
+      username: "",
+      password: "",
+    });
+    setPage("dashboard");
+  };
 
   const handleChange = (e) => {
     setNewCar({
@@ -185,6 +230,30 @@ function App() {
     setRecommendedCars(res.data);
   };
 
+  const handleCustomerChange = (e) => {
+    setCustomerData({
+      ...customerData,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  const handleCreateCustomer = async (e) => {
+    e.preventDefault();
+
+    await api.post("/customers", customerData);
+
+    setCustomerData({
+      fullName: "",
+      email: "",
+      phoneNumber: "",
+      driverLicenseNumber: "",
+    });
+
+    fetchCustomers();
+
+    alert("Customer added successfully");
+  };
+
   const handleMaintenanceChange = (e) => {
     setMaintenanceData({
       ...maintenanceData,
@@ -228,21 +297,74 @@ function App() {
     0
   );
 
+const filteredCars = cars.filter((car) => {
+  const matchesSearch =
+    `${car.brand} ${car.model} ${car.category}`
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
+
+  const matchesCategory =
+    categoryFilter === "ALL" || car.category === categoryFilter;
+
+  return matchesSearch && matchesCategory;
+});
+
   const fleetUtilization =
     cars.length === 0 ? 0 : Math.round((rentedCars / cars.length) * 100);
 
-  const fleetData = [
-    { name: "Available", value: availableCars },
-    { name: "Rented", value: rentedCars },
-    { name: "Maintenance", value: maintenanceCars },
-  ];
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#030712] flex items-center justify-center p-6">
+        <motion.div
+          initial={{ opacity: 0, y: 40 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-md rounded-3xl border border-white/10 bg-black/40 backdrop-blur-xl p-10"
+        >
+          <h1 className="text-5xl font-serif text-[#d4af37] mb-2 text-center">
+            DRIVE X
+          </h1>
 
-  const revenueData = bookings.map((booking, index) => ({
-    name: `Booking ${index + 1}`,
-    revenue: Number(booking.totalPrice || 0),
-  }));
+          <p className="text-gray-400 text-center mb-8">
+            Luxury Fleet Intelligence
+          </p>
 
-  const COLORS = ["#22c55e", "#3b82f6", "#f59e0b"];
+          <form onSubmit={handleLogin} className="space-y-5">
+            <input
+              type="text"
+              name="username"
+              value={loginData.username}
+              onChange={handleLoginChange}
+              placeholder="Username"
+              className="input w-full"
+              required
+            />
+
+            <input
+              type="password"
+              name="password"
+              value={loginData.password}
+              onChange={handleLoginChange}
+              placeholder="Password"
+              className="input w-full"
+              required
+            />
+
+            {loginError && (
+              <p className="text-red-400 text-sm">{loginError}</p>
+            )}
+
+            <button className="gold-btn w-full">
+              Login
+            </button>
+          </form>
+
+          <div className="mt-8 border-t border-white/10 pt-6 text-sm text-gray-500 text-center">
+            admin / admin123
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#030712] text-white flex">
@@ -268,8 +390,16 @@ function App() {
             Analytics
           </button>
 
+          <button onClick={() => setPage("customers")} className="nav-btn">
+            Customers
+          </button>
+
           <button onClick={() => setPage("maintenance")} className="nav-btn">
             Maintenance
+          </button>
+
+          <button onClick={handleLogout} className="nav-btn text-red-400">
+            Logout
           </button>
         </nav>
       </aside>
@@ -349,8 +479,35 @@ function App() {
                 </motion.div>
               )}
             </AnimatePresence>
+<div className="flex flex-col md:flex-row gap-4 mb-8">
+  <input
+    type="text"
+    placeholder="Search brand, model, category..."
+    value={searchTerm}
+    onChange={(e) => setSearchTerm(e.target.value)}
+    className="input flex-1"
+  />
 
-            <CarGrid cars={cars} onEdit={setEditingCar} onDelete={handleDeleteCar} />
+  <select
+    value={categoryFilter}
+    onChange={(e) => setCategoryFilter(e.target.value)}
+    className="input md:w-64"
+  >
+    <option value="ALL">All Categories</option>
+
+    {[...new Set(cars.map((car) => car.category))].map((category) => (
+      <option key={category} value={category}>
+        {category}
+      </option>
+    ))}
+  </select>
+</div>
+           <CarGrid
+             cars={filteredCars}
+             onEdit={setEditingCar}
+             onDelete={handleDeleteCar}
+             onView={setSelectedCar}
+           />
           </>
         )}
 
@@ -518,81 +675,397 @@ function App() {
                   </p>
                 ) : (
                   <div className="space-y-4">
-                    {recommendedCars.map((car) => (
-                      <div key={car.id} className="border border-white/10 rounded-2xl p-4">
-                        <h4 className="text-2xl font-bold">
-                          {car.brand} {car.model}
-                        </h4>
+                    {recommendedCars.map((car) => {
+                      const reasons = [];
 
-                        <p className="text-gray-400 mt-2">
-                          {car.category} • {car.fuelType} • {car.seats} seats
-                        </p>
+                      if (
+                        Number(car.pricePerDay) <=
+                        Number(recommendationForm.maxBudgetPerDay)
+                      ) {
+                        reasons.push("Fits the selected daily budget");
+                      }
 
-                        <div className="flex justify-between mt-4">
-                          <p className="text-[#f7d77a] text-2xl">
-                            ${car.pricePerDay}/day
-                          </p>
+                      if (Number(car.seats) >= Number(recommendationForm.passengers)) {
+                        reasons.push("Has enough passenger seats");
+                      }
 
-                          <p className="text-[#d4af37]">
-                            Score: {car.performanceScore}
-                          </p>
+                      if (
+                        recommendationForm.weather.toLowerCase().includes("rain") &&
+                        car.category.toLowerCase().includes("suv")
+                      ) {
+                        reasons.push("SUV is suitable for rainy weather");
+                      }
+
+                      if (car.fuelType?.toLowerCase().includes("electric")) {
+                        reasons.push("Efficient electric option");
+                      }
+
+                      if (car.performanceScore) {
+                        reasons.push(`Performance score: ${car.performanceScore}`);
+                      }
+
+                      return (
+                        <div
+                          key={car.id}
+                          className="border border-[#d4af37]/30 bg-white/5 rounded-3xl overflow-hidden"
+                        >
+                          <img
+                            src={getCarImage(car)}
+                            alt={car.model}
+                            className="h-56 w-full object-cover"
+                          />
+
+                          <div className="p-5">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h4 className="text-3xl font-bold">
+                                  {car.brand} {car.model}
+                                </h4>
+
+                                <p className="text-gray-400 mt-2">
+                                  {car.category} • {car.fuelType} • {car.seats} seats
+                                </p>
+                              </div>
+
+                              <span className="bg-[#d4af37] text-black px-3 py-1 rounded-full text-xs font-bold">
+                                AI Match
+                              </span>
+                            </div>
+
+                            <p className="text-[#f7d77a] text-3xl font-bold mt-5">
+                              ${car.pricePerDay}/day
+                            </p>
+
+                            <div className="mt-5 bg-black/30 rounded-2xl p-4">
+                              <p className="text-[#d4af37] font-bold mb-2">
+                                Why recommended?
+                              </p>
+
+                              <ul className="space-y-1 text-gray-300 text-sm">
+                                {reasons.length > 0 ? (
+                                  reasons.map((reason, index) => (
+                                    <li key={index}>✓ {reason}</li>
+                                  ))
+                                ) : (
+                                  <li>✓ Matches your selected preferences</li>
+                                )}
+                              </ul>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
             </div>
           </>
         )}
+    {page === "analytics" && (
+      <>
+        <h2 className="text-6xl font-serif mb-4">Fleet Analytics</h2>
 
-        {page === "analytics" && (
+        <p className="text-gray-400 mb-10">
+          Real-time analytics and business intelligence for your luxury rental fleet.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-10">
+          <LuxuryCard
+            title="Total Revenue"
+            value={`$${totalRevenue}`}
+            subtitle="Business income"
+          />
+
+          <LuxuryCard
+            title="Bookings"
+            value={bookings.length}
+            subtitle="Total reservations"
+          />
+
+          <LuxuryCard
+            title="Maintenance Cost"
+            value={`$${totalMaintenanceCost}`}
+            subtitle="Service expenses"
+          />
+
+          <LuxuryCard
+            title="Utilization"
+            value={`${fleetUtilization}%`}
+            subtitle="Rented fleet rate"
+          />
+        </div>
+
+        <div className="mb-8">
+          <button
+            onClick={() => {
+              const reportWindow = window.open("", "_blank");
+
+              reportWindow.document.write(`
+                <html>
+                  <head>
+                    <title>DRIVE X Business Report</title>
+
+                    <style>
+                      body {
+                        font-family: Arial;
+                        background: #0b1120;
+                        color: white;
+                        padding: 40px;
+                      }
+
+                      h1 {
+                        color: #d4af37;
+                        font-size: 42px;
+                      }
+
+                      h2 {
+                        color: #f7d77a;
+                        margin-top: 40px;
+                      }
+
+                      .card {
+                        background: #111827;
+                        border-radius: 16px;
+                        padding: 20px;
+                        margin-bottom: 20px;
+                      }
+
+                      table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin-top: 20px;
+                      }
+
+                      th, td {
+                        border: 1px solid #333;
+                        padding: 12px;
+                        text-align: left;
+                      }
+
+                      th {
+                        background: #d4af37;
+                        color: black;
+                      }
+                    </style>
+                  </head>
+
+                  <body>
+                    <h1>DRIVE X Business Report</h1>
+
+                    <div class="card">
+                      <h2>Business Overview</h2>
+
+                      <p>Total Cars: ${cars.length}</p>
+                      <p>Total Customers: ${customers.length}</p>
+                      <p>Total Bookings: ${bookings.length}</p>
+                      <p>Total Revenue: $${totalRevenue}</p>
+                      <p>Maintenance Cost: $${totalMaintenanceCost}</p>
+                      <p>Fleet Utilization: ${fleetUtilization}%</p>
+                    </div>
+
+                    <h2>Bookings</h2>
+
+                    <table>
+                      <tr>
+                        <th>Customer</th>
+                        <th>Car</th>
+                        <th>Price</th>
+                        <th>Status</th>
+                      </tr>
+
+                      ${bookings.map(
+                        (booking) => `
+                          <tr>
+                            <td>${booking.customer?.fullName || ""}</td>
+                            <td>${booking.car?.brand || ""} ${booking.car?.model || ""}</td>
+                            <td>$${booking.totalPrice}</td>
+                            <td>${booking.status}</td>
+                          </tr>
+                        `
+                      ).join("")}
+                    </table>
+
+                    <h2>Maintenance Records</h2>
+
+                    <table>
+                      <tr>
+                        <th>Car</th>
+                        <th>Description</th>
+                        <th>Cost</th>
+                      </tr>
+
+                      ${maintenanceRecords.map(
+                        (record) => `
+                          <tr>
+                            <td>${record.car?.brand || ""} ${record.car?.model || ""}</td>
+                            <td>${record.description}</td>
+                            <td>$${record.cost}</td>
+                          </tr>
+                        `
+                      ).join("")}
+                    </table>
+                  </body>
+                </html>
+              `);
+
+              reportWindow.document.close();
+              reportWindow.print();
+            }}
+            className="bg-[#d4af37] text-black px-8 py-4 rounded-2xl font-bold hover:scale-105 transition"
+          >
+            Generate Business Report
+          </button>
+        </div>
+
+        <AnalyticsCharts
+          cars={cars}
+          bookings={bookings}
+          maintenanceRecords={maintenanceRecords}
+        />
+      </>
+    )}
+
+        {page === "customers" && (
           <>
-            <h2 className="text-6xl font-serif mb-4">Fleet Analytics</h2>
+            <h2 className="text-6xl font-serif mb-4">
+              Customer Management
+            </h2>
 
             <p className="text-gray-400 mb-10">
-              Revenue, bookings, fleet status, and utilization insights.
+              Manage customer accounts, license information, and booking activity.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-10">
-              <LuxuryCard title="Total Revenue" value={`$${totalRevenue}`} subtitle="Business income" />
-              <LuxuryCard title="Bookings" value={bookings.length} subtitle="Total reservations" />
-              <LuxuryCard title="Maintenance Cost" value={`$${totalMaintenanceCost}`} subtitle="Service expenses" />
-              <LuxuryCard title="Utilization" value={`${fleetUtilization}%`} subtitle="Rented fleet rate" />
+              <LuxuryCard
+                title="Total Customers"
+                value={customers.length}
+                subtitle="Registered clients"
+              />
+
+              <LuxuryCard
+                title="Bookings"
+                value={bookings.length}
+                subtitle="Customer reservations"
+              />
+
+              <LuxuryCard
+                title="Active Rentals"
+                value={rentedCars}
+                subtitle="Currently rented"
+              />
+
+              <LuxuryCard
+                title="Fleet Revenue"
+                value={`$${totalRevenue}`}
+                subtitle="Total income"
+              />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-              <div className="panel h-[450px]">
+              <div className="panel">
                 <h3 className="text-3xl mb-6 text-[#f7d77a]">
-                  Fleet Status Distribution
+                  Add Customer
                 </h3>
 
-                <ResponsiveContainer width="100%" height="85%">
-                  <PieChart>
-                    <Pie data={fleetData} dataKey="value" nameKey="name" outerRadius={130} label>
-                      {fleetData.map((entry, index) => (
-                        <Cell key={index} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
+                <form onSubmit={handleCreateCustomer} className="space-y-4">
+                  <input
+                    name="fullName"
+                    value={customerData.fullName}
+                    onChange={handleCustomerChange}
+                    placeholder="Full Name"
+                    className="input w-full"
+                    required
+                  />
+
+                  <input
+                    name="email"
+                    type="email"
+                    value={customerData.email}
+                    onChange={handleCustomerChange}
+                    placeholder="Email"
+                    className="input w-full"
+                    required
+                  />
+
+                  <input
+                    name="phoneNumber"
+                    value={customerData.phoneNumber}
+                    onChange={handleCustomerChange}
+                    placeholder="Phone Number"
+                    className="input w-full"
+                    required
+                  />
+
+                  <input
+                    name="driverLicenseNumber"
+                    value={customerData.driverLicenseNumber}
+                    onChange={handleCustomerChange}
+                    placeholder="Driver License Number"
+                    className="input w-full"
+                    required
+                  />
+
+                  <button className="gold-btn w-full">
+                    Add Customer
+                  </button>
+                </form>
               </div>
 
-              <div className="panel h-[450px]">
+              <div className="panel">
                 <h3 className="text-3xl mb-6 text-[#f7d77a]">
-                  Booking Revenue
+                  Customer List
                 </h3>
 
-                <ResponsiveContainer width="100%" height="85%">
-                  <BarChart data={revenueData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                    <XAxis dataKey="name" stroke="#999" />
-                    <YAxis stroke="#999" />
-                    <Tooltip />
-                    <Bar dataKey="revenue" fill="#d4af37" radius={[8, 8, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <div className="space-y-4 max-h-[650px] overflow-y-auto">
+                  {customers.length === 0 ? (
+                    <p className="text-gray-400">
+                      No customers yet. Add the first customer using the form.
+                    </p>
+                  ) : (
+                    customers.map((customer) => {
+                      const customerBookings = bookings.filter(
+                        (booking) => booking.customer?.id === customer.id
+                      ).length;
+
+                      return (
+                        <div
+                          key={customer.id}
+                          className="border border-white/10 rounded-2xl p-5"
+                        >
+                          <div className="flex justify-between gap-4">
+                            <div>
+                              <h4 className="text-2xl font-bold">
+                                {customer.fullName}
+                              </h4>
+
+                              <p className="text-gray-400 mt-2">
+                                {customer.email}
+                              </p>
+
+                              <p className="text-gray-400">
+                                {customer.phoneNumber}
+                              </p>
+
+                              <p className="text-[#d4af37] mt-3">
+                                License: {customer.driverLicenseNumber}
+                              </p>
+                            </div>
+
+                            <div className="text-right">
+                              <p className="text-3xl font-bold text-[#f7d77a]">
+                                {customerBookings}
+                              </p>
+
+                              <p className="text-gray-400 text-sm">
+                                bookings
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             </div>
           </>
@@ -780,19 +1253,118 @@ function App() {
           )}
         </AnimatePresence>
       </main>
+      {selectedCar && (
+        <div
+          onClick={() => setSelectedCar(null)}
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-6"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[#0b1120] border border-white/10 rounded-3xl overflow-hidden max-w-5xl w-full grid md:grid-cols-2 shadow-2xl"
+          >
+            <img
+              src={getCarImage(selectedCar)}
+              alt={selectedCar.model}
+              className="h-full w-full object-cover"
+            />
+
+            <div className="p-8 flex flex-col justify-between">
+              <div>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h2 className="text-5xl font-bold">
+                      {selectedCar.brand}
+                    </h2>
+
+                    <p className="text-gray-400 text-xl mt-2">
+                      {selectedCar.model}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => setSelectedCar(null)}
+                    className="text-3xl text-gray-400 hover:text-white"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mt-10">
+                  <div className="bg-white/5 rounded-2xl p-4">
+                    <p className="text-gray-400 text-sm">Category</p>
+                    <h3 className="text-xl mt-1">{selectedCar.category}</h3>
+                  </div>
+
+                  <div className="bg-white/5 rounded-2xl p-4">
+                    <p className="text-gray-400 text-sm">Fuel</p>
+                    <h3 className="text-xl mt-1">{selectedCar.fuelType}</h3>
+                  </div>
+
+                  <div className="bg-white/5 rounded-2xl p-4">
+                    <p className="text-gray-400 text-sm">Seats</p>
+                    <h3 className="text-xl mt-1">{selectedCar.seats}</h3>
+                  </div>
+
+                  <div className="bg-white/5 rounded-2xl p-4">
+                    <p className="text-gray-400 text-sm">Status</p>
+                    <h3 className="text-xl mt-1">{selectedCar.status}</h3>
+                  </div>
+
+                  <div className="bg-white/5 rounded-2xl p-4">
+                    <p className="text-gray-400 text-sm">Transmission</p>
+                    <h3 className="text-xl mt-1">
+                      {selectedCar.transmission}
+                    </h3>
+                  </div>
+
+                  <div className="bg-white/5 rounded-2xl p-4">
+                    <p className="text-gray-400 text-sm">Year</p>
+                    <h3 className="text-xl mt-1">{selectedCar.year}</h3>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-10 flex justify-between items-center">
+                <div>
+                  <p className="text-gray-400">Rental Price</p>
+
+                  <h2 className="text-5xl font-bold text-[#d4af37]">
+                    ${selectedCar.pricePerDay}
+                  </h2>
+
+                  <p className="text-gray-400 mt-1">per day</p>
+                </div>
+
+                <button className="bg-[#d4af37] hover:bg-[#e5c158] transition text-black px-8 py-4 rounded-2xl font-bold text-lg">
+                  Rent Now
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function CarGrid({ cars, onEdit, onDelete }) {
+function CarGrid({ cars, onEdit, onDelete, onView }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
       {cars.map((car) => (
-        <div key={car.id} className="rounded-3xl border border-white/10 bg-white/5 overflow-hidden">
-          <img src={getCarImage(car)} alt={car.model} className="h-64 w-full object-cover" />
+        <div
+          key={car.id}
+          onClick={() => onView(car)}
+          className="rounded-3xl border border-white/10 bg-white/5 overflow-hidden cursor-pointer hover:scale-[1.02] hover:border-[#d4af37]/40 transition"
+        >
+          <img
+            src={getCarImage(car)}
+            alt={car.model}
+            className="h-64 w-full object-cover"
+          />
 
           <div className="p-6">
             <h3 className="text-3xl font-bold">{car.brand}</h3>
+
             <p className="text-gray-400">{car.model}</p>
 
             <div className="mt-5 space-y-2">
@@ -802,23 +1374,35 @@ function CarGrid({ cars, onEdit, onDelete }) {
             </div>
 
             <div className="mt-6 flex justify-between items-center">
-              <h2 className="text-4xl text-[#f7d77a]">${car.pricePerDay}</h2>
+              <h2 className="text-4xl text-[#f7d77a]">
+                ${car.pricePerDay}
+              </h2>
 
-              <span className={`px-3 py-1 rounded-full text-xs ${statusStyle(car.status)}`}>
+              <span
+                className={`px-3 py-1 rounded-full text-xs ${statusStyle(
+                  car.status
+                )}`}
+              >
                 {car.status}
               </span>
             </div>
 
             <div className="mt-6 flex gap-3">
               <button
-                onClick={() => onEdit(car)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit(car);
+                }}
                 className="flex-1 bg-[#d4af37] text-black py-3 rounded-2xl font-bold"
               >
                 Edit
               </button>
 
               <button
-                onClick={() => onDelete(car.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(car.id);
+                }}
                 className="flex-1 border border-red-500/30 py-3 rounded-2xl"
               >
                 Delete
@@ -850,15 +1434,38 @@ function statusStyle(status) {
 function getCarImage(car) {
   const name = `${car.brand} ${car.model}`.toLowerCase();
 
-  if (name.includes("mercedes")) {
+  if (name.includes("mercedes") || name.includes("amg")) {
     return "https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?q=80&w=1200&auto=format&fit=crop";
   }
 
-  if (name.includes("hyundai") || car.category === "SUV") {
+  if (name.includes("bmw") || name.includes("x5")) {
+    return "https://images.unsplash.com/photo-1555215695-3004980ad54e?q=80&w=1200&auto=format&fit=crop";
+  }
+
+if (name.includes("range rover") || name.includes("velar")) {
+  return "https://images.unsplash.com/photo-1544636331-e26879cd4d9b?q=80&w=1200&auto=format&fit=crop";
+}
+
+  if (name.includes("porsche") || name.includes("911")) {
+    return "https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=1200&auto=format&fit=crop";
+  }
+
+  if (name.includes("tesla")) {
+    return "https://images.unsplash.com/photo-1560958089-b8a1929cea89?q=80&w=1200&auto=format&fit=crop";
+  }
+
+  if (name.includes("audi")) {
+    return "https://images.unsplash.com/photo-1606152421802-db97b9c7a11b?q=80&w=1200&auto=format&fit=crop";
+  }
+
+  if (name.includes("toyota") || name.includes("corolla")) {
+    return "https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?q=80&w=1200&auto=format&fit=crop";
+  }
+
+  if (name.includes("hyundai") || name.includes("tucson")) {
     return "https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?q=80&w=1200&auto=format&fit=crop";
   }
 
   return "https://images.unsplash.com/photo-1550355291-bbee04a92027?q=80&w=1200&auto=format&fit=crop";
 }
-
 export default App;
