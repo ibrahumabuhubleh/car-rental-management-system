@@ -24,6 +24,23 @@ function App() {
   const [showForm, setShowForm] = useState(false);
   const [editingCar, setEditingCar] = useState(null);
   const [selectedCar, setSelectedCar] = useState(null);
+  const [paymentBooking, setPaymentBooking] = useState(null);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+
+  const [paymentData, setPaymentData] = useState({
+    cardName: "",
+    cardNumber: "",
+    expiry: "",
+    cvv: "",
+    method: "Credit Card",
+  });
+
+  const [contactData, setContactData] = useState({
+    name: "",
+    email: "",
+    subject: "",
+    message: "",
+  });
 
   const [bookingData, setBookingData] = useState({
     carId: "",
@@ -37,6 +54,7 @@ function App() {
     passengers: "",
     durationDays: "",
     weather: "",
+    tripPurpose: "Business",
   });
 
   const [recommendedCars, setRecommendedCars] = useState([]);
@@ -227,7 +245,33 @@ function App() {
       },
     });
 
-    setRecommendedCars(res.data);
+    let results = res.data || [];
+
+    if (recommendationForm.tripPurpose === "Family") {
+      results = [...results].sort((a, b) => Number(b.seats || 0) - Number(a.seats || 0));
+    }
+
+    if (recommendationForm.tripPurpose === "Luxury") {
+      results = [...results].sort(
+        (a, b) => Number(b.performanceScore || 0) - Number(a.performanceScore || 0)
+      );
+    }
+
+    if (recommendationForm.tripPurpose === "Budget") {
+      results = [...results].sort(
+        (a, b) => Number(a.pricePerDay || 0) - Number(b.pricePerDay || 0)
+      );
+    }
+
+    setRecommendedCars(results);
+  };
+
+  const handleBookRecommendedCar = (car) => {
+    setBookingData({
+      ...bookingData,
+      carId: String(car.id),
+    });
+    setPage("bookings");
   };
 
   const handleCustomerChange = (e) => {
@@ -283,6 +327,92 @@ function App() {
     alert("Maintenance record created");
   };
 
+  const handlePaymentChange = (e) => {
+    setPaymentData({
+      ...paymentData,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  const openPaymentPage = (booking) => {
+    setPaymentBooking(booking);
+    setPaymentSuccess(false);
+    setPaymentData({
+      cardName: "",
+      cardNumber: "",
+      expiry: "",
+      cvv: "",
+      method: "Credit Card",
+    });
+    setPage("payment");
+  };
+
+  const handlePaymentSubmit = (e) => {
+    e.preventDefault();
+    setPaymentSuccess(true);
+  };
+
+  const handlePrintReceipt = () => {
+    const receiptWindow = window.open("", "_blank");
+
+    receiptWindow.document.write(`
+      <html>
+        <head>
+          <title>DRIVE X Payment Receipt</title>
+          <style>
+            body {
+              font-family: Arial;
+              background: #0b1120;
+              color: white;
+              padding: 40px;
+            }
+            h1 { color: #d4af37; font-size: 42px; }
+            .card {
+              background: #111827;
+              border-radius: 16px;
+              padding: 24px;
+              margin-top: 24px;
+            }
+            p { font-size: 18px; }
+            .gold { color: #f7d77a; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <h1>DRIVE X Payment Receipt</h1>
+          <div class="card">
+            <p><b>Customer:</b> ${paymentBooking?.customer?.fullName || ""}</p>
+            <p><b>Car:</b> ${paymentBooking?.car?.brand || ""} ${paymentBooking?.car?.model || ""}</p>
+            <p><b>Rental Dates:</b> ${paymentBooking?.startDate || ""} → ${paymentBooking?.endDate || ""}</p>
+            <p><b>Payment Method:</b> ${paymentData.method}</p>
+            <p class="gold"><b>Total Paid:</b> $${paymentBooking?.totalPrice || 0}</p>
+            <p><b>Status:</b> Paid Successfully</p>
+          </div>
+        </body>
+      </html>
+    `);
+
+    receiptWindow.document.close();
+    receiptWindow.print();
+  };
+
+  const handleContactChange = (e) => {
+    setContactData({
+      ...contactData,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  const handleContactSubmit = (e) => {
+    e.preventDefault();
+    alert("Message submitted successfully. DRIVE X will contact you soon.");
+    setContactData({
+      name: "",
+      email: "",
+      subject: "",
+      message: "",
+    });
+  };
+
   const availableCars = cars.filter((car) => car.status === "AVAILABLE").length;
   const rentedCars = cars.filter((car) => car.status === "RENTED").length;
   const maintenanceCars = cars.filter((car) => car.status === "MAINTENANCE").length;
@@ -297,17 +427,15 @@ function App() {
     0
   );
 
-const filteredCars = cars.filter((car) => {
-  const matchesSearch =
-    `${car.brand} ${car.model} ${car.category}`
+  const filteredCars = cars.filter((car) => {
+    const matchesSearch = `${car.brand} ${car.model} ${car.category}`
       .toLowerCase()
       .includes(searchTerm.toLowerCase());
 
-  const matchesCategory =
-    categoryFilter === "ALL" || car.category === categoryFilter;
+    const matchesCategory = categoryFilter === "ALL" || car.category === categoryFilter;
 
-  return matchesSearch && matchesCategory;
-});
+    return matchesSearch && matchesCategory;
+  });
 
   const fleetUtilization =
     cars.length === 0 ? 0 : Math.round((rentedCars / cars.length) * 100);
@@ -349,13 +477,9 @@ const filteredCars = cars.filter((car) => {
               required
             />
 
-            {loginError && (
-              <p className="text-red-400 text-sm">{loginError}</p>
-            )}
+            {loginError && <p className="text-red-400 text-sm">{loginError}</p>}
 
-            <button className="gold-btn w-full">
-              Login
-            </button>
+            <button className="gold-btn w-full">Login</button>
           </form>
 
           <div className="mt-8 border-t border-white/10 pt-6 text-sm text-gray-500 text-center">
@@ -369,9 +493,7 @@ const filteredCars = cars.filter((car) => {
   return (
     <div className="min-h-screen bg-[#030712] text-white flex">
       <aside className="w-64 border-r border-white/10 bg-black/40 p-6 hidden md:flex flex-col">
-        <h1 className="text-4xl font-serif text-[#d4af37] mb-10">
-          DRIVE X
-        </h1>
+        <h1 className="text-4xl font-serif text-[#d4af37] mb-10">DRIVE X</h1>
 
         <nav className="space-y-3">
           <button onClick={() => setPage("dashboard")} className="nav-btn">
@@ -386,6 +508,10 @@ const filteredCars = cars.filter((car) => {
             AI Recommendations
           </button>
 
+          <button onClick={() => setPage("payment")} className="nav-btn">
+            Payments
+          </button>
+
           <button onClick={() => setPage("analytics")} className="nav-btn">
             Analytics
           </button>
@@ -396,6 +522,10 @@ const filteredCars = cars.filter((car) => {
 
           <button onClick={() => setPage("maintenance")} className="nav-btn">
             Maintenance
+          </button>
+
+          <button onClick={() => setPage("contact")} className="nav-btn">
+            Contact
           </button>
 
           <button onClick={handleLogout} className="nav-btn text-red-400">
@@ -479,35 +609,37 @@ const filteredCars = cars.filter((car) => {
                 </motion.div>
               )}
             </AnimatePresence>
-<div className="flex flex-col md:flex-row gap-4 mb-8">
-  <input
-    type="text"
-    placeholder="Search brand, model, category..."
-    value={searchTerm}
-    onChange={(e) => setSearchTerm(e.target.value)}
-    className="input flex-1"
-  />
 
-  <select
-    value={categoryFilter}
-    onChange={(e) => setCategoryFilter(e.target.value)}
-    className="input md:w-64"
-  >
-    <option value="ALL">All Categories</option>
+            <div className="flex flex-col md:flex-row gap-4 mb-8">
+              <input
+                type="text"
+                placeholder="Search brand, model, category..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="input flex-1"
+              />
 
-    {[...new Set(cars.map((car) => car.category))].map((category) => (
-      <option key={category} value={category}>
-        {category}
-      </option>
-    ))}
-  </select>
-</div>
-           <CarGrid
-             cars={filteredCars}
-             onEdit={setEditingCar}
-             onDelete={handleDeleteCar}
-             onView={setSelectedCar}
-           />
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="input md:w-64"
+              >
+                <option value="ALL">All Categories</option>
+
+                {[...new Set(cars.map((car) => car.category))].map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <CarGrid
+              cars={filteredCars}
+              onEdit={setEditingCar}
+              onDelete={handleDeleteCar}
+              onView={setSelectedCar}
+            />
           </>
         )}
 
@@ -596,9 +728,18 @@ const filteredCars = cars.filter((car) => {
                         ${booking.totalPrice}
                       </p>
 
-                      <span className="text-xs px-3 py-1 rounded-full bg-blue-500/20 text-blue-300">
-                        {booking.status}
-                      </span>
+                      <div className="mt-4 flex flex-wrap gap-3 items-center">
+                        <span className="text-xs px-3 py-1 rounded-full bg-blue-500/20 text-blue-300">
+                          {booking.status}
+                        </span>
+
+                        <button
+                          onClick={() => openPaymentPage(booking)}
+                          className="bg-[#d4af37] text-black px-4 py-2 rounded-xl font-bold text-sm"
+                        >
+                          Pay Now
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -613,7 +754,7 @@ const filteredCars = cars.filter((car) => {
 
             <p className="text-gray-400 mb-10 max-w-2xl">
               Get smart car suggestions based on budget, passengers, trip duration,
-              and weather conditions.
+              weather conditions, and trip purpose.
             </p>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
@@ -658,6 +799,18 @@ const filteredCars = cars.filter((car) => {
                     className="input w-full"
                   />
 
+                  <select
+                    name="tripPurpose"
+                    value={recommendationForm.tripPurpose}
+                    onChange={handleRecommendationChange}
+                    className="input w-full"
+                  >
+                    <option value="Business">Business Trip</option>
+                    <option value="Family">Family Trip</option>
+                    <option value="Luxury">Luxury Experience</option>
+                    <option value="Budget">Budget Friendly</option>
+                  </select>
+
                   <button className="gold-btn w-full">
                     Get AI Recommendations
                   </button>
@@ -694,6 +847,22 @@ const filteredCars = cars.filter((car) => {
                         car.category.toLowerCase().includes("suv")
                       ) {
                         reasons.push("SUV is suitable for rainy weather");
+                      }
+
+                      if (recommendationForm.tripPurpose === "Family") {
+                        reasons.push("Suitable for family travel and passenger comfort");
+                      }
+
+                      if (recommendationForm.tripPurpose === "Luxury") {
+                        reasons.push("Prioritized for luxury and performance score");
+                      }
+
+                      if (recommendationForm.tripPurpose === "Budget") {
+                        reasons.push("Sorted to show lower daily rental cost first");
+                      }
+
+                      if (recommendationForm.tripPurpose === "Business") {
+                        reasons.push("Good option for professional/business use");
                       }
 
                       if (car.fuelType?.toLowerCase().includes("electric")) {
@@ -751,6 +920,13 @@ const filteredCars = cars.filter((car) => {
                                 )}
                               </ul>
                             </div>
+
+                            <button
+                              onClick={() => handleBookRecommendedCar(car)}
+                              className="gold-btn w-full mt-5"
+                            >
+                              Book This Car
+                            </button>
                           </div>
                         </div>
                       );
@@ -761,175 +937,353 @@ const filteredCars = cars.filter((car) => {
             </div>
           </>
         )}
-    {page === "analytics" && (
-      <>
-        <h2 className="text-6xl font-serif mb-4">Fleet Analytics</h2>
 
-        <p className="text-gray-400 mb-10">
-          Real-time analytics and business intelligence for your luxury rental fleet.
-        </p>
+        {page === "payment" && (
+          <>
+            <h2 className="text-6xl font-serif mb-4">Payment Center</h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-10">
-          <LuxuryCard
-            title="Total Revenue"
-            value={`$${totalRevenue}`}
-            subtitle="Business income"
-          />
+            <p className="text-gray-400 mb-10 max-w-3xl">
+              Process rental payments and generate printable receipts for confirmed bookings.
+            </p>
 
-          <LuxuryCard
-            title="Bookings"
-            value={bookings.length}
-            subtitle="Total reservations"
-          />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+              <div className="panel">
+                <h3 className="text-3xl mb-6 text-[#f7d77a]">Select Booking</h3>
 
-          <LuxuryCard
-            title="Maintenance Cost"
-            value={`$${totalMaintenanceCost}`}
-            subtitle="Service expenses"
-          />
+                {bookings.length === 0 ? (
+                  <p className="text-gray-400">No bookings available for payment.</p>
+                ) : (
+                  <div className="space-y-4 max-h-[620px] overflow-y-auto">
+                    {bookings.map((booking) => (
+                      <button
+                        key={booking.id}
+                        onClick={() => openPaymentPage(booking)}
+                        className={`w-full text-left border rounded-2xl p-4 transition ${
+                          paymentBooking?.id === booking.id
+                            ? "border-[#d4af37] bg-[#d4af37]/10"
+                            : "border-white/10 bg-white/5 hover:border-[#d4af37]/40"
+                        }`}
+                      >
+                        <h4 className="text-xl font-bold">
+                          {booking.car?.brand} {booking.car?.model}
+                        </h4>
 
-          <LuxuryCard
-            title="Utilization"
-            value={`${fleetUtilization}%`}
-            subtitle="Rented fleet rate"
-          />
-        </div>
+                        <p className="text-gray-400 mt-2">
+                          Customer: {booking.customer?.fullName}
+                        </p>
 
-        <div className="mb-8">
-          <button
-            onClick={() => {
-              const reportWindow = window.open("", "_blank");
+                        <p className="text-gray-400">
+                          {booking.startDate} → {booking.endDate}
+                        </p>
 
-              reportWindow.document.write(`
-                <html>
-                  <head>
-                    <title>DRIVE X Business Report</title>
+                        <p className="text-[#f7d77a] text-2xl mt-2">
+                          ${booking.totalPrice}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-                    <style>
-                      body {
-                        font-family: Arial;
-                        background: #0b1120;
-                        color: white;
-                        padding: 40px;
-                      }
+              <div className="panel">
+                <h3 className="text-3xl mb-6 text-[#f7d77a]">Payment Details</h3>
 
-                      h1 {
-                        color: #d4af37;
-                        font-size: 42px;
-                      }
+                {!paymentBooking ? (
+                  <p className="text-gray-400">
+                    Select a booking from the left side or click Pay Now from the Bookings page.
+                  </p>
+                ) : paymentSuccess ? (
+                  <div className="space-y-5">
+                    <div className="rounded-3xl border border-green-500/30 bg-green-500/10 p-6">
+                      <h4 className="text-3xl font-bold text-green-300">
+                        Payment Successful
+                      </h4>
 
-                      h2 {
-                        color: #f7d77a;
-                        margin-top: 40px;
-                      }
-
-                      .card {
-                        background: #111827;
-                        border-radius: 16px;
-                        padding: 20px;
-                        margin-bottom: 20px;
-                      }
-
-                      table {
-                        width: 100%;
-                        border-collapse: collapse;
-                        margin-top: 20px;
-                      }
-
-                      th, td {
-                        border: 1px solid #333;
-                        padding: 12px;
-                        text-align: left;
-                      }
-
-                      th {
-                        background: #d4af37;
-                        color: black;
-                      }
-                    </style>
-                  </head>
-
-                  <body>
-                    <h1>DRIVE X Business Report</h1>
-
-                    <div class="card">
-                      <h2>Business Overview</h2>
-
-                      <p>Total Cars: ${cars.length}</p>
-                      <p>Total Customers: ${customers.length}</p>
-                      <p>Total Bookings: ${bookings.length}</p>
-                      <p>Total Revenue: $${totalRevenue}</p>
-                      <p>Maintenance Cost: $${totalMaintenanceCost}</p>
-                      <p>Fleet Utilization: ${fleetUtilization}%</p>
+                      <p className="text-gray-300 mt-3">
+                        Receipt generated for {paymentBooking.customer?.fullName}.
+                      </p>
                     </div>
 
-                    <h2>Bookings</h2>
+                    <div className="bg-black/30 rounded-2xl p-5 space-y-2">
+                      <p>
+                        <span className="text-gray-400">Car:</span>{" "}
+                        {paymentBooking.car?.brand} {paymentBooking.car?.model}
+                      </p>
 
-                    <table>
-                      <tr>
-                        <th>Customer</th>
-                        <th>Car</th>
-                        <th>Price</th>
-                        <th>Status</th>
-                      </tr>
+                      <p>
+                        <span className="text-gray-400">Amount:</span>{" "}
+                        <span className="text-[#f7d77a] font-bold">
+                          ${paymentBooking.totalPrice}
+                        </span>
+                      </p>
 
-                      ${bookings.map(
-                        (booking) => `
+                      <p>
+                        <span className="text-gray-400">Method:</span>{" "}
+                        {paymentData.method}
+                      </p>
+                    </div>
+
+                    <button onClick={handlePrintReceipt} className="gold-btn w-full">
+                      Print Receipt
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setPaymentSuccess(false);
+                        setPaymentBooking(null);
+                      }}
+                      className="border border-white/10 hover:bg-white/10 py-4 rounded-2xl font-bold w-full"
+                    >
+                      New Payment
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={handlePaymentSubmit} className="space-y-4">
+                    <div className="bg-black/30 rounded-2xl p-5 mb-6">
+                      <h4 className="text-2xl font-bold">
+                        {paymentBooking.car?.brand} {paymentBooking.car?.model}
+                      </h4>
+
+                      <p className="text-gray-400 mt-2">
+                        Customer: {paymentBooking.customer?.fullName}
+                      </p>
+
+                      <p className="text-[#f7d77a] text-3xl mt-3 font-bold">
+                        ${paymentBooking.totalPrice}
+                      </p>
+                    </div>
+
+                    <select
+                      name="method"
+                      value={paymentData.method}
+                      onChange={handlePaymentChange}
+                      className="input w-full"
+                    >
+                      <option value="Credit Card">Credit Card</option>
+                      <option value="Debit Card">Debit Card</option>
+                      <option value="Cash">Cash</option>
+                      <option value="Bank Transfer">Bank Transfer</option>
+                    </select>
+
+                    <input
+                      name="cardName"
+                      value={paymentData.cardName}
+                      onChange={handlePaymentChange}
+                      placeholder="Cardholder Name"
+                      className="input w-full"
+                      required={paymentData.method !== "Cash"}
+                    />
+
+                    <input
+                      name="cardNumber"
+                      value={paymentData.cardNumber}
+                      onChange={handlePaymentChange}
+                      placeholder="Card Number"
+                      className="input w-full"
+                      required={paymentData.method !== "Cash"}
+                    />
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <input
+                        name="expiry"
+                        value={paymentData.expiry}
+                        onChange={handlePaymentChange}
+                        placeholder="MM/YY"
+                        className="input w-full"
+                        required={paymentData.method !== "Cash"}
+                      />
+
+                      <input
+                        name="cvv"
+                        value={paymentData.cvv}
+                        onChange={handlePaymentChange}
+                        placeholder="CVV"
+                        className="input w-full"
+                        required={paymentData.method !== "Cash"}
+                      />
+                    </div>
+
+                    <button className="gold-btn w-full">
+                      Confirm Payment
+                    </button>
+                  </form>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+
+        {page === "analytics" && (
+          <>
+            <h2 className="text-6xl font-serif mb-4">Fleet Analytics</h2>
+
+            <p className="text-gray-400 mb-10">
+              Real-time analytics and business intelligence for your luxury rental fleet.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-10">
+              <LuxuryCard
+                title="Total Revenue"
+                value={`$${totalRevenue}`}
+                subtitle="Business income"
+              />
+
+              <LuxuryCard
+                title="Bookings"
+                value={bookings.length}
+                subtitle="Total reservations"
+              />
+
+              <LuxuryCard
+                title="Maintenance Cost"
+                value={`$${totalMaintenanceCost}`}
+                subtitle="Service expenses"
+              />
+
+              <LuxuryCard
+                title="Utilization"
+                value={`${fleetUtilization}%`}
+                subtitle="Rented fleet rate"
+              />
+            </div>
+
+            <div className="mb-8">
+              <button
+                onClick={() => {
+                  const reportWindow = window.open("", "_blank");
+
+                  reportWindow.document.write(`
+                    <html>
+                      <head>
+                        <title>DRIVE X Business Report</title>
+
+                        <style>
+                          body {
+                            font-family: Arial;
+                            background: #0b1120;
+                            color: white;
+                            padding: 40px;
+                          }
+
+                          h1 {
+                            color: #d4af37;
+                            font-size: 42px;
+                          }
+
+                          h2 {
+                            color: #f7d77a;
+                            margin-top: 40px;
+                          }
+
+                          .card {
+                            background: #111827;
+                            border-radius: 16px;
+                            padding: 20px;
+                            margin-bottom: 20px;
+                          }
+
+                          table {
+                            width: 100%;
+                            border-collapse: collapse;
+                            margin-top: 20px;
+                          }
+
+                          th, td {
+                            border: 1px solid #333;
+                            padding: 12px;
+                            text-align: left;
+                          }
+
+                          th {
+                            background: #d4af37;
+                            color: black;
+                          }
+                        </style>
+                      </head>
+
+                      <body>
+                        <h1>DRIVE X Business Report</h1>
+
+                        <div class="card">
+                          <h2>Business Overview</h2>
+
+                          <p>Total Cars: ${cars.length}</p>
+                          <p>Total Customers: ${customers.length}</p>
+                          <p>Total Bookings: ${bookings.length}</p>
+                          <p>Total Revenue: $${totalRevenue}</p>
+                          <p>Maintenance Cost: $${totalMaintenanceCost}</p>
+                          <p>Fleet Utilization: ${fleetUtilization}%</p>
+                        </div>
+
+                        <h2>Bookings</h2>
+
+                        <table>
                           <tr>
-                            <td>${booking.customer?.fullName || ""}</td>
-                            <td>${booking.car?.brand || ""} ${booking.car?.model || ""}</td>
-                            <td>$${booking.totalPrice}</td>
-                            <td>${booking.status}</td>
+                            <th>Customer</th>
+                            <th>Car</th>
+                            <th>Price</th>
+                            <th>Status</th>
                           </tr>
-                        `
-                      ).join("")}
-                    </table>
 
-                    <h2>Maintenance Records</h2>
+                          ${bookings
+                            .map(
+                              (booking) => `
+                                <tr>
+                                  <td>${booking.customer?.fullName || ""}</td>
+                                  <td>${booking.car?.brand || ""} ${booking.car?.model || ""}</td>
+                                  <td>$${booking.totalPrice}</td>
+                                  <td>${booking.status}</td>
+                                </tr>
+                              `
+                            )
+                            .join("")}
+                        </table>
 
-                    <table>
-                      <tr>
-                        <th>Car</th>
-                        <th>Description</th>
-                        <th>Cost</th>
-                      </tr>
+                        <h2>Maintenance Records</h2>
 
-                      ${maintenanceRecords.map(
-                        (record) => `
+                        <table>
                           <tr>
-                            <td>${record.car?.brand || ""} ${record.car?.model || ""}</td>
-                            <td>${record.description}</td>
-                            <td>$${record.cost}</td>
+                            <th>Car</th>
+                            <th>Description</th>
+                            <th>Cost</th>
                           </tr>
-                        `
-                      ).join("")}
-                    </table>
-                  </body>
-                </html>
-              `);
 
-              reportWindow.document.close();
-              reportWindow.print();
-            }}
-            className="bg-[#d4af37] text-black px-8 py-4 rounded-2xl font-bold hover:scale-105 transition"
-          >
-            Generate Business Report
-          </button>
-        </div>
+                          ${maintenanceRecords
+                            .map(
+                              (record) => `
+                                <tr>
+                                  <td>${record.car?.brand || ""} ${record.car?.model || ""}</td>
+                                  <td>${record.description}</td>
+                                  <td>$${record.cost}</td>
+                                </tr>
+                              `
+                            )
+                            .join("")}
+                        </table>
+                      </body>
+                    </html>
+                  `);
 
-        <AnalyticsCharts
-          cars={cars}
-          bookings={bookings}
-          maintenanceRecords={maintenanceRecords}
-        />
-      </>
-    )}
+                  reportWindow.document.close();
+                  reportWindow.print();
+                }}
+                className="bg-[#d4af37] text-black px-8 py-4 rounded-2xl font-bold hover:scale-105 transition"
+              >
+                Generate Business Report
+              </button>
+            </div>
+
+            <AnalyticsCharts
+              cars={cars}
+              bookings={bookings}
+              maintenanceRecords={maintenanceRecords}
+            />
+          </>
+        )}
 
         {page === "customers" && (
           <>
-            <h2 className="text-6xl font-serif mb-4">
-              Customer Management
-            </h2>
+            <h2 className="text-6xl font-serif mb-4">Customer Management</h2>
 
             <p className="text-gray-400 mb-10">
               Manage customer accounts, license information, and booking activity.
@@ -963,9 +1317,7 @@ const filteredCars = cars.filter((car) => {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
               <div className="panel">
-                <h3 className="text-3xl mb-6 text-[#f7d77a]">
-                  Add Customer
-                </h3>
+                <h3 className="text-3xl mb-6 text-[#f7d77a]">Add Customer</h3>
 
                 <form onSubmit={handleCreateCustomer} className="space-y-4">
                   <input
@@ -1005,16 +1357,12 @@ const filteredCars = cars.filter((car) => {
                     required
                   />
 
-                  <button className="gold-btn w-full">
-                    Add Customer
-                  </button>
+                  <button className="gold-btn w-full">Add Customer</button>
                 </form>
               </div>
 
               <div className="panel">
-                <h3 className="text-3xl mb-6 text-[#f7d77a]">
-                  Customer List
-                </h3>
+                <h3 className="text-3xl mb-6 text-[#f7d77a]">Customer List</h3>
 
                 <div className="space-y-4 max-h-[650px] overflow-y-auto">
                   {customers.length === 0 ? (
@@ -1056,9 +1404,7 @@ const filteredCars = cars.filter((car) => {
                                 {customerBookings}
                               </p>
 
-                              <p className="text-gray-400 text-sm">
-                                bookings
-                              </p>
+                              <p className="text-gray-400 text-sm">bookings</p>
                             </div>
                           </div>
                         </div>
@@ -1073,9 +1419,7 @@ const filteredCars = cars.filter((car) => {
 
         {page === "maintenance" && (
           <>
-            <h2 className="text-6xl font-serif mb-4">
-              Maintenance Management
-            </h2>
+            <h2 className="text-6xl font-serif mb-4">Maintenance Management</h2>
 
             <p className="text-gray-400 mb-10">
               Track vehicle servicing, repair costs, and maintenance history.
@@ -1138,22 +1482,16 @@ const filteredCars = cars.filter((car) => {
                     required
                   />
 
-                  <button className="gold-btn w-full">
-                    Save Maintenance Record
-                  </button>
+                  <button className="gold-btn w-full">Save Maintenance Record</button>
                 </form>
               </div>
 
               <div className="panel">
-                <h3 className="text-3xl mb-6 text-[#f7d77a]">
-                  Maintenance History
-                </h3>
+                <h3 className="text-3xl mb-6 text-[#f7d77a]">Maintenance History</h3>
 
                 <div className="space-y-4 max-h-[600px] overflow-y-auto">
                   {maintenanceRecords.length === 0 ? (
-                    <p className="text-gray-400">
-                      No maintenance records yet.
-                    </p>
+                    <p className="text-gray-400">No maintenance records yet.</p>
                   ) : (
                     maintenanceRecords.map((record) => (
                       <div
@@ -1164,22 +1502,103 @@ const filteredCars = cars.filter((car) => {
                           {record.car?.brand} {record.car?.model}
                         </h4>
 
-                        <p className="text-gray-400 mt-2">
-                          {record.description}
-                        </p>
+                        <p className="text-gray-400 mt-2">{record.description}</p>
 
                         <div className="flex justify-between mt-4">
-                          <p className="text-[#f7d77a] text-xl">
-                            ${record.cost}
-                          </p>
+                          <p className="text-[#f7d77a] text-xl">${record.cost}</p>
 
-                          <p className="text-gray-400">
-                            {record.serviceDate}
-                          </p>
+                          <p className="text-gray-400">{record.serviceDate}</p>
                         </div>
                       </div>
                     ))
                   )}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {page === "contact" && (
+          <>
+            <h2 className="text-6xl font-serif mb-4">Contact DRIVE X</h2>
+
+            <p className="text-gray-400 mb-10 max-w-3xl">
+              Customer support and company contact information for rental inquiries,
+              booking help, and service requests.
+            </p>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+              <div className="panel">
+                <h3 className="text-3xl mb-6 text-[#f7d77a]">Send Message</h3>
+
+                <form onSubmit={handleContactSubmit} className="space-y-4">
+                  <input
+                    name="name"
+                    value={contactData.name}
+                    onChange={handleContactChange}
+                    placeholder="Full Name"
+                    className="input w-full"
+                    required
+                  />
+
+                  <input
+                    name="email"
+                    type="email"
+                    value={contactData.email}
+                    onChange={handleContactChange}
+                    placeholder="Email Address"
+                    className="input w-full"
+                    required
+                  />
+
+                  <input
+                    name="subject"
+                    value={contactData.subject}
+                    onChange={handleContactChange}
+                    placeholder="Subject"
+                    className="input w-full"
+                    required
+                  />
+
+                  <textarea
+                    name="message"
+                    value={contactData.message}
+                    onChange={handleContactChange}
+                    placeholder="Message"
+                    className="input w-full min-h-[160px]"
+                    required
+                  />
+
+                  <button className="gold-btn w-full">Submit Message</button>
+                </form>
+              </div>
+
+              <div className="panel">
+                <h3 className="text-3xl mb-6 text-[#f7d77a]">Company Information</h3>
+
+                <div className="space-y-5">
+                  <div className="border border-white/10 rounded-2xl p-5 bg-white/5">
+                    <p className="text-gray-400">Phone</p>
+                    <h4 className="text-2xl mt-1">+965 2222 4455</h4>
+                  </div>
+
+                  <div className="border border-white/10 rounded-2xl p-5 bg-white/5">
+                    <p className="text-gray-400">Email</p>
+                    <h4 className="text-2xl mt-1">support@drivex.com</h4>
+                  </div>
+
+                  <div className="border border-white/10 rounded-2xl p-5 bg-white/5">
+                    <p className="text-gray-400">Location</p>
+                    <h4 className="text-2xl mt-1">Kuwait City, Kuwait</h4>
+                  </div>
+
+                  <div className="border border-[#d4af37]/30 rounded-2xl p-5 bg-[#d4af37]/10">
+                    <p className="text-[#f7d77a] font-bold">Support Hours</p>
+                    <p className="text-gray-300 mt-2">
+                      Sunday - Thursday: 9:00 AM - 6:00 PM
+                    </p>
+                    <p className="text-gray-300">Friday - Saturday: Emergency support only</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1253,6 +1672,7 @@ const filteredCars = cars.filter((car) => {
           )}
         </AnimatePresence>
       </main>
+
       {selectedCar && (
         <div
           onClick={() => setSelectedCar(null)}
@@ -1272,9 +1692,7 @@ const filteredCars = cars.filter((car) => {
               <div>
                 <div className="flex justify-between items-start">
                   <div>
-                    <h2 className="text-5xl font-bold">
-                      {selectedCar.brand}
-                    </h2>
+                    <h2 className="text-5xl font-bold">{selectedCar.brand}</h2>
 
                     <p className="text-gray-400 text-xl mt-2">
                       {selectedCar.model}
@@ -1312,9 +1730,7 @@ const filteredCars = cars.filter((car) => {
 
                   <div className="bg-white/5 rounded-2xl p-4">
                     <p className="text-gray-400 text-sm">Transmission</p>
-                    <h3 className="text-xl mt-1">
-                      {selectedCar.transmission}
-                    </h3>
+                    <h3 className="text-xl mt-1">{selectedCar.transmission}</h3>
                   </div>
 
                   <div className="bg-white/5 rounded-2xl p-4">
@@ -1335,7 +1751,17 @@ const filteredCars = cars.filter((car) => {
                   <p className="text-gray-400 mt-1">per day</p>
                 </div>
 
-                <button className="bg-[#d4af37] hover:bg-[#e5c158] transition text-black px-8 py-4 rounded-2xl font-bold text-lg">
+                <button
+                  onClick={() => {
+                    setBookingData({
+                      ...bookingData,
+                      carId: String(selectedCar.id),
+                    });
+                    setSelectedCar(null);
+                    setPage("bookings");
+                  }}
+                  className="bg-[#d4af37] hover:bg-[#e5c158] transition text-black px-8 py-4 rounded-2xl font-bold text-lg"
+                >
                   Rent Now
                 </button>
               </div>
@@ -1374,15 +1800,9 @@ function CarGrid({ cars, onEdit, onDelete, onView }) {
             </div>
 
             <div className="mt-6 flex justify-between items-center">
-              <h2 className="text-4xl text-[#f7d77a]">
-                ${car.pricePerDay}
-              </h2>
+              <h2 className="text-4xl text-[#f7d77a]">${car.pricePerDay}</h2>
 
-              <span
-                className={`px-3 py-1 rounded-full text-xs ${statusStyle(
-                  car.status
-                )}`}
-              >
+              <span className={`px-3 py-1 rounded-full text-xs ${statusStyle(car.status)}`}>
                 {car.status}
               </span>
             </div>
@@ -1442,9 +1862,9 @@ function getCarImage(car) {
     return "https://images.unsplash.com/photo-1555215695-3004980ad54e?q=80&w=1200&auto=format&fit=crop";
   }
 
-if (name.includes("range rover") || name.includes("velar")) {
-  return "https://images.unsplash.com/photo-1544636331-e26879cd4d9b?q=80&w=1200&auto=format&fit=crop";
-}
+  if (name.includes("range rover") || name.includes("velar")) {
+    return "https://images.unsplash.com/photo-1544636331-e26879cd4d9b?q=80&w=1200&auto=format&fit=crop";
+  }
 
   if (name.includes("porsche") || name.includes("911")) {
     return "https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=1200&auto=format&fit=crop";
@@ -1468,4 +1888,5 @@ if (name.includes("range rover") || name.includes("velar")) {
 
   return "https://images.unsplash.com/photo-1550355291-bbee04a92027?q=80&w=1200&auto=format&fit=crop";
 }
+
 export default App;
